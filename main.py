@@ -17,7 +17,12 @@ class Destino(BaseModel):
     cidade:str = Field("A cidade recomendada para visitar")
     motivo: str = Field("O motivo pelo qual é interessante visitar essa cidade")
 
-parser = JsonOutputParser(pydantic_object=Destino)
+class Restaurantes(BaseModel):
+    cidade:str = Field("A cidade recomendada para visitar")
+    restaurantes:str = Field("Restaurantes recomendados na cidade")
+
+parser_destino = JsonOutputParser(pydantic_object=Destino)
+parser_restaurantes = JsonOutputParser(pydantic_object=Restaurantes)
 
 prompt_cidade = PromptTemplate(
     template = """
@@ -25,7 +30,21 @@ prompt_cidade = PromptTemplate(
         {formato_de_saida}
     """,
     input_variables = ["interesse"],
-    partial_variables = {"formato_de_saida": parser.get_format_instructions()}
+    partial_variables = {"formato_de_saida": parser_destino.get_format_instructions()}
+)
+
+prompt_restaurantes = PromptTemplate(
+    template = """
+        Sugira restaurantes populares entre locais em {cidade}.
+        {formato_de_saida}
+    """,
+    partial_variables = {"formato_de_saida": parser_restaurantes.get_format_instructions()}
+)
+
+prompt_cultural = PromptTemplate(
+    template="""
+        Sugira atividades e locais culturais em {cidade}
+    """
 )
 
 llm = ChatGoogleGenerativeAI(
@@ -34,7 +53,11 @@ llm = ChatGoogleGenerativeAI(
     api_key = api_key_google
 )
 
-cadeia = prompt_cidade | llm | parser
+cadeia_cidade = prompt_cidade | llm | parser_destino
+cadeia_restaurantes = prompt_restaurantes | llm | parser_restaurantes
+cadeia_cultural = prompt_cultural | llm | StrOutputParser()
+
+cadeia = (cadeia_cidade | cadeia_restaurantes | cadeia_cultural)
 
 resposta = cadeia.invoke(
     {
